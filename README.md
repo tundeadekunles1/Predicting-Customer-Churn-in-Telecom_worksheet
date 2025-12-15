@@ -16,6 +16,9 @@ Main objectives:
 
  ## 2. Repository Structure
 
+ 
+```
+
 Predicting-Customer-Churn-in-Telecom/
 ├── data/
 │ ├── raw/ # Original Telco-Customer-Churn.csv
@@ -33,7 +36,10 @@ Predicting-Customer-Churn-in-Telecom/
 │ └── evaluation.py # evaluate_model (metrics, confusion matrix)
 ├── main.py # CLI entry point: full pipeline
 ├── requirements.txt
-└── README.md
+└── README.md 
+
+```
+
 
 ## 3. Data Pipeline
 
@@ -96,6 +102,8 @@ These insights directly informed the feature engineering and model choice.
 
 ### 5.1. Setup
 
+```
+
 git clone https://github.com/tundeadekunles1/Predicting-Customer-Churn-in-Telecom.git
 cd Predicting-Customer-Churn-in-Telecom
 
@@ -109,6 +117,8 @@ pip install -r requirements.txt
 
 Place the IBM Telco Customer Churn CSV as:
 data/raw/Telco-Customer-Churn.csv
+
+```
 
 ### 5.2. Run full pipeline from the command line
 
@@ -141,6 +151,7 @@ Model‑level numbers will depend slightly on random seeds and implementation de
 
 - Logistic Regression achieves solid baseline performance and interpretable coefficients.  
 - Random Forest often improves recall and AUC, and its feature importances highlight key churn drivers (contract type, monthly charges, payment method, internet service).
+  
 
 These models can be used by marketing and retention teams to prioritize at‑risk customers and design targeted interventions.
 
