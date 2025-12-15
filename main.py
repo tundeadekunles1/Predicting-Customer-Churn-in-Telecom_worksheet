@@ -1,6 +1,7 @@
+import os
+import sys
 
-
-
+from src.data_preprocessing import create_data_dirs, load_data, clean_data
 from src.feature_engineering import engineer_features
 from src.model_training import prepare_data, train_logistic_regression, train_random_forest
 from src.evaluation import evaluate_model
@@ -9,7 +10,7 @@ from src.evaluation import evaluate_model
 def main():
     # 1. Ensure directories exist and load raw data
     create_data_dirs()
-    df = load_data("data/raw/raw data/Telco-Customer-Churn.csv")
+    df = load_data("data/raw/Telco-Customer-Churn.csv")
 
     # 2. Clean and engineer features
     df = clean_data(df)
