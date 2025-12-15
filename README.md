@@ -1,145 +1,149 @@
-Predicting Customer Churn in Telecom
-Project Overview
-This repository contains all analyses and code for a customer churn prediction project using the IBM Telco Customer Churn dataset. Our goal is to build robust machine learning models to predict which telecom customers are likely to churn, with a focus on transparent and reproducible data preparation in line with industry best practices and mentorship feedback.
+# Predicting Customer Churn in Telecom
 
-Project Progress
-✅ Data Cleaning & Preprocessing (Completed)
-All code, exploration, and cleaning up to the modeling-ready stage have been completed and documented below. Each step is accompanied by in-notebook markdown for clarity and learning.
+End‑to‑end DSML group project to predict customer churn for a telecom company using the IBM Telco Customer Churn dataset. The repository follows a `src/` + `notebooks/` structure so analysis is transparent, reproducible, and easy to extend.
 
-1. Imports and Setup
-We imported essential libraries (pandas, numpy, matplotlib, seaborn, pathlib) to handle data analysis, visualization, and file management.
+## 1. Project Overview
 
-2. Data Organization
-We created dedicated folders:
+Customer churn (customer attrition) is a key business problem for telecoms, where even a small increase in churn can significantly impact recurring revenue. 
+This project builds machine learning models to identify customers at high risk of churning and highlights the drivers of churn so retention teams can take action. 
 
-../data/raw/ for unmodified source data.
+Main objectives:
 
-../data/processed/ for cleaned, analysis-ready datasets.
+- Clean and prepare the IBM Telco Customer Churn dataset for modeling.  
+- Explore drivers of churn with EDA and feature engineering.  
+- Train and evaluate Logistic Regression and Random Forest models.  
+- Provide a single entry point (`main.py`) to run the full pipeline.
 
-This clear separation supports reproducibility and easy handoff.
+ ## 2. Repository Structure
 
-3. Data Loading
-We loaded the IBM Telco Customer Churn dataset from CSV into a pandas DataFrame for processing.
-
-4. Initial Data Inspection
-We explored:
-
-Dataset shape and column types (df.info())
-
-Basic statistics (df.describe())
-
-Checked for missing values and potential data type mismatches
-
-5. Whitespace and Formatting Fixes
-To avoid subtle errors, we:
-
-Stripped extra spaces from all column names and string cells.
-
-6. Handling Missing Values
-We addressed missing/invalid data by:
-
-Converting TotalCharges to a numeric type.
-
-Filling any missing TotalCharges with the median value.
-
-7. Removing Unnecessary Columns
-We dropped unique identifier columns (customerID) that do not add predictive value for modeling.
-
-8. Feature Engineering
-We created new, more insightful features for modeling, such as:
-
-Binning tenure into tenure groups to better capture customer lifetime patterns.
-
-9. Encoding Categorical Variables
-All categorical fields were transformed using one-hot encoding, resulting in a fully numeric dataset suitable for machine learning algorithms.
-
-10. Quality Checks
-We performed rigorous final checks before saving:
-
-Verified no missing or infinite values remain
-
-Confirmed no duplicate records exist
-
-Explored target variable balance (churned vs. not churned)
-
-11. Saving the Cleaned Dataset
-The cleaned, encoded data was saved at:
-../data/processed/telco_cleaned.csv
-This file will be used for model training and further analysis.
-
-Next Steps
-Exploratory Data Analysis (EDA): deeper visual insights, correlation checks, etc.
-
-Model training and evaluation.
-
-Reproducibility
-All code cells are clearly numbered and documented throughout the notebook.
-For library version control, run:
-
-python
-import sys
-print("Python:", sys.version)
-print("Pandas:", pd.__version__)
-print("Numpy:", np.__version__)
-
-## Exploratory Data Analysis (EDA)
-
-After cleaning and preprocessing, we conducted Exploratory Data Analysis (EDA) to extract actionable insights and guide feature engineering for the prediction task.
-
-### 1. Descriptive Statistics
-- Calculated basic statistics (mean, median, std, min, max, quartiles) for numeric features like `tenure`, `MonthlyCharges`, and `TotalCharges`.
-- Analyzed frequency distributions for categorical features including `gender`, `Partner`, `Dependents`, `InternetService`, `Contract`, and `PaymentMethod`.
-- Notable findings: Most customers have short tenure, moderately high monthly charges, and prefer month-to-month contracts. Churn rate is about 27%.
-
-### 2. Univariate Analysis
-- Plotted histograms for all numerical features to assess distribution shapes and outliers.
-    - **Tenure:** Right-skewed, indicating a large base of new customers.
-    - **MonthlyCharges/TotalCharges:** Broad range with a few high outliers.
-- Plotted bar charts for categorical features.
-    - Confirmed high representation for fiber optic internet, electronic check payment, and month-to-month contracts.
-
-### 3. Bivariate Analysis
-- Used boxplots to compare numeric features with churn:
-    - Churned users have lower tenure and total charges but higher monthly charges.
-- Used stacked bar plots to compare churn with categorical features:
-    - **Contract Type:** Month-to-month users churn significantly more often than longer-term contract holders.
-    - **Payment Method:** Electronic check customers have higher churn.
-    - **Internet Service:** Fiber optic customers churn more than DSL or no-internet users.
-
-### 4. Correlation Analysis
-- Visualized the correlation matrix (heatmap) for all encoded features.
-    - **Strongest predictors of churn:** month-to-month contracts, higher monthly charges, electronic check payment, and fiber optic internet.
-    - Features showed low multicollinearity, supporting their use as model inputs.
-
-### Key EDA Takeaways
-- Customers with short tenure, high monthly charges, month-to-month contracts, fiber optic internet, and electronic check payments are at highest churn risk.
-- Majority of input features are suitable for predictive modeling, supported by both visual and statistical EDA.
-
-Our EDA informed the engineering of new features and selection of variables for machine learning, laying the groundwork for model development and targeted retention strategies.
-
-Project Structure.
-
-telco-customer-churn-prediction/
-│
+Predicting-Customer-Churn-in-Telecom/
 ├── data/
-│ ├── raw/ 
-│ ├── processed/ 
-│
+│ ├── raw/ # Original Telco-Customer-Churn.csv
+│ └── processed/ # Cleaned / feature-engineered data
 ├── notebooks/
 │ ├── 01_data_exploration.ipynb
 │ ├── 02_feature_engineering.ipynb
 │ ├── 03_model_training.ipynb
-│ ├── 04_model_evaluation.ipynb
-│
-├── models/
-│ ├── churn_model
+│ └── 04_model_evaluation.ipynb
 ├── src/
-│ ├── data_preprocessing.py
-│ ├── model_training.py
-│ ├── evaluation.py
-│
-├── reports/
-│ └── summary_report.md
-│
+│ ├── init.py
+│ ├── data_preprocessing.py # create_data_dirs, load_data, clean_data
+│ ├── feature_engineering.py # engineer_features
+│ ├── model_training.py # prepare_data, train_logistic_regression, train_random_forest
+│ └── evaluation.py # evaluate_model (metrics, confusion matrix)
+├── main.py # CLI entry point: full pipeline
 ├── requirements.txt
-├── README.md
+└── README.md
+
+## 3. Data Pipeline
+
+The full pipeline (also implemented in `main.py`) is:
+
+1. **Data loading & directories**  
+   - `create_data_dirs()` ensures `data/raw` and `data/processed` exist.  
+   - `load_data("data/raw/Telco-Customer-Churn.csv")` loads the IBM Telco churn CSV into a pandas DataFrame.[web:71]
+
+2. **Cleaning (`src.data_preprocessing`)**  
+   - Strip whitespace from column names and string values.  
+   - Convert `TotalCharges` to numeric and handle missing values (e.g., median imputation).  
+   - Drop non‑predictive identifiers such as `customerID`.
+
+3. **Feature engineering (`src.feature_engineering`)**  
+   - Create `tenure_group` bins to capture customer lifetime patterns.  
+   - Create additional risk/flag features (e.g., `HighSpender`, `PaymentRisk`, `HighChurnRisk`) used later in modeling.  
+   - Prepare a modeling‑ready DataFrame with interpretable features.
+
+4. **Encoding, split, and scaling (`prepare_data`)**  
+   - Map target `Churn` from `"Yes"/"No"` to `1/0`.  
+   - Drop `customerID` and `tenure_group` before modeling.  
+   - Label‑encode remaining categorical columns.  
+   - Split into train/test with stratification on churn, then apply `StandardScaler` to features.
+
+5. **Model training (`src.model_training`)**  
+   - `train_logistic_regression(X_train, y_train)` → fitted `LogisticRegression`  
+   - `train_random_forest(X_train, y_train)` → fitted `RandomForestClassifier`
+
+6. **Evaluation (`src.evaluation.evaluate_model`)**  
+   - For a given model and `(X_test, y_test)`, compute:  
+     - Accuracy, precision, recall, F1‑score.  
+     - Confusion matrix.  
+     - Text classification report.
+   - In `04_model_evaluation.ipynb`, additional plots include:
+     - Confusion matrix heatmaps.  
+     - ROC curves (AUC) for both models.  
+     - Feature importance barplot for Random Forest.
+
+
+
+## 4. Exploratory Data Analysis (EDA) – Highlights
+
+Detailed EDA is in `01_data_exploration.ipynb` and `02_feature_engineering.ipynb`, but key findings include:[web:48][web:64][web:71]
+
+- **Churn rate**: around one‑quarter to one‑third of customers churn in the IBM Telco dataset.  
+- **High‑risk profiles**:
+  - Short tenure, high monthly charges.  
+  - Month‑to‑month contracts.  
+  - Fiber‑optic internet.  
+  - Electronic check as payment method.  
+- **Feature suitability**:
+  - Most engineered and encoded features show useful variation and limited multicollinearity, making them appropriate for modeling.
+
+These insights directly informed the feature engineering and model choice.
+
+---
+
+## 5. How to Run
+
+### 5.1. Setup
+
+git clone https://github.com/tundeadekunles1/Predicting-Customer-Churn-in-Telecom.git
+cd Predicting-Customer-Churn-in-Telecom
+
+python -m venv .venv
+
+Windows
+..venv\Scripts\activate
+
+Install dependencies
+pip install -r requirements.txt
+
+Place the IBM Telco Customer Churn CSV as:
+data/raw/Telco-Customer-Churn.csv
+
+### 5.2. Run full pipeline from the command line
+
+python main.py
+
+This will:
+
+- Create data folders if needed.  
+- Load, clean, and engineer the dataset.  
+- Prepare train/test sets.  
+- Train Logistic Regression and Random Forest.  
+- Print metrics and classification reports for both models.
+
+### 5.3. Run step‑by‑step in notebooks
+
+Open the `notebooks/` folder and run in order:
+
+1. `01_data_exploration.ipynb` – raw data inspection and basic EDA.  
+2. `02_feature_engineering.ipynb` – cleaning + feature engineering → saves processed CSV.  
+3. `03_model_training.ipynb` – training Logistic Regression and Random Forest.  
+4. `04_model_evaluation.ipynb` – evaluation metrics, confusion matrices, ROC curves, feature importance.
+
+Each notebook is self‑contained and re‑creates any required variables from disk.
+
+---
+
+## 6. Results (High‑Level)
+
+Model‑level numbers will depend slightly on random seeds and implementation details, but typically on this dataset: 
+
+- Logistic Regression achieves solid baseline performance and interpretable coefficients.  
+- Random Forest often improves recall and AUC, and its feature importances highlight key churn drivers (contract type, monthly charges, payment method, internet service).
+
+These models can be used by marketing and retention teams to prioritize at‑risk customers and design targeted interventions.
+
+
+
+
