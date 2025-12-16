@@ -12,3 +12,6 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.db
+notebooks/01_data_exploration.ipynb
+notebooks/02_feature_engineering.ipynb
+notebooks/03_model_training.ipynb
