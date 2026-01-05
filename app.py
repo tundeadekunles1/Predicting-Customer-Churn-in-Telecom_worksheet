@@ -1,109 +1,257 @@
-import streamlit as st
-import pandas as pd
 import os
-from src.data_preprocessing import create_data_dirs, load_data, clean_data
-from src.Feature_engineering import engineer_features
-from src.model_training import prepare_data, train_logistic_regression, train_random_forest
-from src.evaluation import evaluate_model
+import joblib
+import pandas as pd
+import streamlit as st
+# --------------------------------------------------
+# Constants from your feature engineering
+# --------------------------------------------------
+MONTHLY_MEAN = 64.76169246059918  # from your notebook (np.float64)
 
-# Configure page
+
+# --------------------------------------------------
+# Streamlit page config
+# --------------------------------------------------
 st.set_page_config(
-    page_title="Customer Churn Predictor",
-    page_icon="📊",
-    layout="wide"
+    page_title="Telecom Customer Churn Predictor",
+    layout="centered"
 )
 
-st.title("📊 Telecom Customer Churn Prediction")
-st.markdown("An end-to-end DSML project to predict customer churn using Machine Learning")
+st.title("Telecom Customer Churn Prediction")
+st.write(
+    "Enter customer information on the left to estimate the probability of churn "
+    "using the trained Logistic Regression model from your DSML project."
+)
 
-# Sidebar with options
-st.sidebar.title("Navigation")
-page = st.sidebar.radio("Select a page", ["Home", "Model Training", "Make Prediction"])
 
-if page == "Home":
-    st.header("Welcome!")
-    st.markdown("""
-    This app predicts which telecom customers are likely to churn using the **IBM Telco Customer Churn dataset**.
-    
-    ### Key Features:
-    - 📈 Exploratory Data Analysis
-    - 🤖 Logistic Regression & Random Forest models
-    - 🎯 Real-time churn predictions
-    - 📊 Model performance metrics
-    
-    ### Business Impact:
-    Even small increases in churn significantly impact recurring revenue. This model helps retention teams identify at-risk customers.
-    """)
+# --------------------------------------------------
+# Load trained pipeline (preprocessor + LogisticRegression)
+# --------------------------------------------------
+@st.cache_resource
+def load_pipeline():
+    model_path = os.path.join("models", "churn_pipeline.joblib")
+    if not os.path.exists(model_path):
+        st.error(
+            "Model file `models/churn_pipeline.joblib` not found.\n\n"
+            "Please run the notebook cell that saves the logistic regression pipeline "
+            "as `churn_pipeline.joblib` inside the `models` folder."
+        )
+        st.stop()
+    return joblib.load(model_path)
 
-elif page == "Model Training":
-    st.header("🤖 Model Training & Evaluation")
-    
-    if st.button("Train Models"):
-        with st.spinner("Training models... This may take a minute."):
-            try:
-                # Create directories and load data
-                create_data_dirs()
-                df = load_data("data/raw/Telco-Customer-Churn.csv")
-                
-                # Preprocess and engineer features
-                df = clean_data(df)
-                df = engineer_features(df)
-                
-                # Prepare data
-                X_train, X_test, y_train, y_test = prepare_data(df)
-                
-                # Train models
-                log_model = train_logistic_regression(X_train, y_train)
-                rf_model = train_random_forest(X_train, y_train)
-                
-                # Evaluate
-                log_results = evaluate_model(log_model, X_test, y_test)
-                rf_results = evaluate_model(rf_model, X_test, y_test)
-                
-                # Display results
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.subheader("Logistic Regression")
-                    st.metric("Accuracy", f"{log_results['accuracy']:.4f}")
-                    st.metric("Precision", f"{log_results['precision']:.4f}")
-                    st.metric("Recall", f"{log_results['recall']:.4f}")
-                    st.metric("F1-Score", f"{log_results['f1']:.4f}")
-                
-                with col2:
-                    st.subheader("Random Forest")
-                    st.metric("Accuracy", f"{rf_results['accuracy']:.4f}")
-                    st.metric("Precision", f"{rf_results['precision']:.4f}")
-                    st.metric("Recall", f"{rf_results['recall']:.4f}")
-                    st.metric("F1-Score", f"{rf_results['f1']:.4f}")
-                
-                st.success("✅ Models trained successfully!")
-                
-            except FileNotFoundError:
-                st.error("❌ Data file not found. Please ensure 'data/raw/Telco-Customer-Churn.csv' exists.")
-            except Exception as e:
-                st.error(f"❌ Error during training: {str(e)}")
 
-elif page == "Make Prediction":
-    st.header("🎯 Predict Customer Churn")
-    st.markdown("Enter customer information below to predict churn probability")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        tenure = st.slider("Tenure (months)", 0, 72, 12)
-        monthly_charges = st.slider("Monthly Charges ($)", 0, 120, 50)
-        contract = st.selectbox("Contract Type", ["Month-to-month", "One year", "Two year"])
-    
-    with col2:
-        internet_service = st.selectbox("Internet Service", ["Fiber optic", "DSL", "No"])
-        payment_method = st.selectbox("Payment Method", ["Electronic check", "Mailed check", "Bank transfer", "Credit card"])
-        tech_support = st.selectbox("Tech Support", ["Yes", "No"])
-    
-    if st.button("Predict Churn"):
-        st.info("Prediction feature requires a trained model. Train models first in the 'Model Training' section.")
+pipeline = load_pipeline()
 
-if __name__ == "__main__":
-    st.sidebar.markdown("---")
-    st.sidebar.info("Built with ❤️ using Streamlit | DSML Group Project")
 
+# --------------------------------------------------
+# Helper functions to build the 26 features
+# --------------------------------------------------
+def build_feature_row(
+    senior_citizen: int,
+    tenure: int,
+    monthly_charges: float,
+    total_charges: float,
+    gender: str,
+    partner: str,
+    dependents: str,
+    phone_service: str,
+    multiple_lines: str,
+    internet_service: str,
+    online_security: str,
+    online_backup: str,
+    device_protection: str,
+    tech_support: str,
+    streaming_tv: str,
+    streaming_movies: str,
+    contract: str,
+    paperless_billing: str,
+    payment_method: str,
+) -> pd.DataFrame:
+    """
+    Build a single-row DataFrame with EXACTLY the 26 training features.
+    """
+
+    # --- Core numeric features ---
+    charges_ratio = total_charges / tenure if tenure > 0 else 0.0
+
+    high_spender = 1 if monthly_charges > MONTHLY_MEAN else 0
+
+    high_churn_risk = 1 if (
+        senior_citizen == 1
+        and monthly_charges > MONTHLY_MEAN
+        and tenure <= 12
+    ) else 0
+
+    # --- One-hot style binary flags from categorical inputs ---
+    gender_male = 1 if gender == "Male" else 0
+
+    partner_yes = 1 if partner == "Yes" else 0
+    dependents_yes = 1 if dependents == "Yes" else 0
+
+    phone_service_yes = 1 if phone_service == "Yes" else 0
+    multiple_lines_yes = 1 if multiple_lines == "Yes" else 0
+
+    internet_fiber = 1 if internet_service == "Fiber optic" else 0
+    internet_no = 1 if internet_service == "No" else 0
+
+    online_security_yes = 1 if online_security == "Yes" else 0
+    online_backup_yes = 1 if online_backup == "Yes" else 0
+    device_protection_yes = 1 if device_protection == "Yes" else 0
+    tech_support_yes = 1 if tech_support == "Yes" else 0
+
+    streaming_tv_yes = 1 if streaming_tv == "Yes" else 0
+    streaming_movies_yes = 1 if streaming_movies == "Yes" else 0
+
+    contract_one_year = 1 if contract == "One year" else 0
+    contract_two_year = 1 if contract == "Two year" else 0
+
+    paperless_billing_yes = 1 if paperless_billing == "Yes" else 0
+
+    payment_credit_card = 1 if payment_method == "Credit card (automatic)" else 0
+    payment_electronic_check = 1 if payment_method == "Electronic check" else 0
+    payment_mailed_check = 1 if payment_method == "Mailed check" else 0
+
+    # --- Build DataFrame with the 26 columns in your training list ---
+    data = {
+        "SeniorCitizen": [senior_citizen],
+        "tenure": [tenure],
+        "MonthlyCharges": [monthly_charges],
+        "TotalCharges": [total_charges],
+        "charges_ratio": [charges_ratio],
+
+        "gender_Male": [gender_male],
+        "Partner_Yes": [partner_yes],
+        "Dependents_Yes": [dependents_yes],
+        "PhoneService_Yes": [phone_service_yes],
+        "MultipleLines_Yes": [multiple_lines_yes],
+        "InternetService_Fiber optic": [internet_fiber],
+        "InternetService_No": [internet_no],
+        "OnlineSecurity_Yes": [online_security_yes],
+        "OnlineBackup_Yes": [online_backup_yes],
+        "DeviceProtection_Yes": [device_protection_yes],
+        "TechSupport_Yes": [tech_support_yes],
+        "StreamingTV_Yes": [streaming_tv_yes],
+        "StreamingMovies_Yes": [streaming_movies_yes],
+        "Contract_One year": [contract_one_year],
+        "Contract_Two year": [contract_two_year],
+        "PaperlessBilling_Yes": [paperless_billing_yes],
+        "PaymentMethod_Credit card (automatic)": [payment_credit_card],
+        "PaymentMethod_Electronic check": [payment_electronic_check],
+        "PaymentMethod_Mailed check": [payment_mailed_check],
+
+        "HighSpender": [high_spender],
+        "HighChurnRisk": [high_churn_risk],
+    }
+
+    return pd.DataFrame(data)
+
+
+# --------------------------------------------------
+# Sidebar: user inputs
+# --------------------------------------------------
+st.sidebar.header("Customer information")
+
+gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
+
+senior_citizen = st.sidebar.selectbox("Senior Citizen", [0, 1])
+partner = st.sidebar.selectbox("Partner", ["No", "Yes"])
+dependents = st.sidebar.selectbox("Dependents", ["No", "Yes"])
+
+phone_service = st.sidebar.selectbox("Phone Service", ["No", "Yes"])
+multiple_lines = st.sidebar.selectbox("Multiple Lines", ["No", "Yes"])
+
+internet_service = st.sidebar.selectbox(
+    "Internet Service",
+    ["DSL", "Fiber optic", "No"]
+)
+
+online_security = st.sidebar.selectbox("Online Security", ["No", "Yes"])
+online_backup = st.sidebar.selectbox("Online Backup", ["No", "Yes"])
+device_protection = st.sidebar.selectbox("Device Protection", ["No", "Yes"])
+tech_support = st.sidebar.selectbox("Tech Support", ["No", "Yes"])
+streaming_tv = st.sidebar.selectbox("Streaming TV", ["No", "Yes"])
+streaming_movies = st.sidebar.selectbox("Streaming Movies", ["No", "Yes"])
+
+contract = st.sidebar.selectbox(
+    "Contract",
+    ["Month-to-month", "One year", "Two year"]
+)
+
+paperless_billing = st.sidebar.selectbox("Paperless Billing", ["No", "Yes"])
+
+payment_method = st.sidebar.selectbox(
+    "Payment Method",
+    [
+        "Electronic check",
+        "Mailed check",
+        "Bank transfer (automatic)",
+        "Credit card (automatic)",
+    ]
+)
+
+tenure = st.sidebar.slider("Tenure (months)", min_value=0, max_value=72, value=12)
+monthly_charges = st.sidebar.number_input(
+    "Monthly Charges",
+    min_value=0.0,
+    max_value=250.0,
+    value=70.0,
+    step=1.0,
+)
+total_charges = st.sidebar.number_input(
+    "Total Charges",
+    min_value=0.0,
+    max_value=10000.0,
+    value=1000.0,
+    step=10.0,
+)
+
+
+# --------------------------------------------------
+# Build input DataFrame and predict
+# --------------------------------------------------
+input_df = build_feature_row(
+    senior_citizen=senior_citizen,
+    tenure=tenure,
+    monthly_charges=monthly_charges,
+    total_charges=total_charges,
+    gender=gender,
+    partner=partner,
+    dependents=dependents,
+    phone_service=phone_service,
+    multiple_lines=multiple_lines,
+    internet_service=internet_service,
+    online_security=online_security,
+    online_backup=online_backup,
+    device_protection=device_protection,
+    tech_support=tech_support,
+    streaming_tv=streaming_tv,
+    streaming_movies=streaming_movies,
+    contract=contract,
+    paperless_billing=paperless_billing,
+    payment_method=payment_method,
+)
+
+st.subheader("Model input features")
+st.dataframe(input_df)
+
+
+if st.button("Predict churn"):
+    try:
+        # Logistic Regression pipeline: preprocessor + classifier
+        prob = pipeline.predict_proba(input_df)[:, 1][0]
+        pred = pipeline.predict(input_df)[0]
+
+        st.subheader("Prediction result")
+        st.write(f"Estimated churn probability: **{prob:.2f}**")
+
+        if int(pred) == 1:
+            st.error("This customer is **likely** to churn.")
+        else:
+            st.success("This customer is **not likely** to churn.")
+
+    except Exception as e:
+        st.error(
+            "An error occurred while making the prediction. "
+            "Please ensure the saved `churn_pipeline.joblib` was trained "
+            "on the same 26 features as constructed here."
+        )
+        st.exception(e)
