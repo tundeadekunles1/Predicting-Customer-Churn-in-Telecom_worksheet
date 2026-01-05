@@ -27,3 +27,4 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     df.dropna(how="any", inplace=True)
     return df
      
+     
