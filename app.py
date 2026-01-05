@@ -2,6 +2,7 @@ import os
 import joblib
 import pandas as pd
 import streamlit as st
+from src.Feature_engineering import engineer_features
 # --------------------------------------------------
 # Constants from your feature engineering
 # --------------------------------------------------
