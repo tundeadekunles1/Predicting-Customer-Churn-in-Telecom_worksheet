@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 from src.data_preprocessing import create_data_dirs, load_data, clean_data
-from src.feature_engineering import engineer_features
+from src.Feature_engineering import engineer_features
 from src.model_training import prepare_data, train_logistic_regression, train_random_forest
 from src.evaluation import evaluate_model
 
