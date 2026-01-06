@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 from src.Feature_engineering import engineer_features
 # --------------------------------------------------
-# Constants from your feature engineering
+# Constants feature engineering
 # --------------------------------------------------
 MONTHLY_MEAN = 64.76169246059918  # from your notebook (np.float64)
 
@@ -19,8 +19,8 @@ st.set_page_config(
 
 st.title("Telecom Customer Churn Prediction")
 st.write(
-    "Enter customer information on the left to estimate the probability of churn "
-    "using the trained Logistic Regression model from your DSML project."
+    "Enter customer information on the left to estimate the probability of churn."
+    "DSML Project."
 )
 
 
@@ -33,7 +33,7 @@ def load_pipeline():
     if not os.path.exists(model_path):
         st.error(
             "Model file `models/churn_pipeline.joblib` not found.\n\n"
-            "Please run the notebook cell that saves the logistic regression pipeline "
+            "Please run the notebook cell that saves the logistic regression pipeline."
             "as `churn_pipeline.joblib` inside the `models` folder."
         )
         st.stop()
@@ -68,7 +68,7 @@ def build_feature_row(
     payment_method: str,
 ) -> pd.DataFrame:
     """
-    Build a single-row DataFrame with EXACTLY the 26 training features.
+    Build a single-row DataFrame using the 26 training features.
     """
 
     # --- Core numeric features ---
@@ -111,7 +111,7 @@ def build_feature_row(
     payment_electronic_check = 1 if payment_method == "Electronic check" else 0
     payment_mailed_check = 1 if payment_method == "Mailed check" else 0
 
-    # --- Build DataFrame with the 26 columns in your training list ---
+    # --- Build DataFrame using 26 columns in your training list ---
     data = {
         "SeniorCitizen": [senior_citizen],
         "tenure": [tenure],
