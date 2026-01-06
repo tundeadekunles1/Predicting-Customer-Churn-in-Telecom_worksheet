@@ -6,7 +6,7 @@ from src.Feature_engineering import engineer_features
 # --------------------------------------------------
 # Constants feature engineering
 # --------------------------------------------------
-MONTHLY_MEAN = 64.76169246059918  # from your notebook (np.float64)
+MONTHLY_MEAN = 64.76169246059918
 
 
 # --------------------------------------------------
@@ -14,14 +14,23 @@ MONTHLY_MEAN = 64.76169246059918  # from your notebook (np.float64)
 # --------------------------------------------------
 st.set_page_config(
     page_title="Telecom Customer Churn Predictor",
-    layout="centered"
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
-
-st.title("Telecom Customer Churn Prediction")
-st.write(
-    "Enter customer information on the left to estimate the probability of churn."
-    "DSML Project."
+st.markdown(
+    """
+    <h1 style="font-size:2.4rem; margin-bottom:0.4rem;">
+        Telecom Customer Churn Predictor
+    </h1>
+    <p style="font-size:1rem; color:#6c757d; max-width:520px;">
+        Enter customer information to estimate churn probability and take action
+        before valuable customers leave.
+    </p>
+    """,
+    unsafe_allow_html=True,
 )
+st.markdown("<br>", unsafe_allow_html=True)
 
 
 # --------------------------------------------------
@@ -111,7 +120,7 @@ def build_feature_row(
     payment_electronic_check = 1 if payment_method == "Electronic check" else 0
     payment_mailed_check = 1 if payment_method == "Mailed check" else 0
 
-    # --- Build DataFrame using 26 columns in your training list ---
+    # --- Build DataFrame using 26 columns in training list ---
     data = {
         "SeniorCitizen": [senior_citizen],
         "tenure": [tenure],
@@ -237,9 +246,21 @@ st.dataframe(input_df)
 
 if st.button("Predict churn"):
     try:
-        # Logistic Regression pipeline: preprocessor + classifier
         prob = pipeline.predict_proba(input_df)[:, 1][0]
         pred = pipeline.predict(input_df)[0]
+
+        st.markdown(
+            """
+            <div style="
+                border-radius:18px;
+                padding:18px 20px;
+                background:linear-gradient(135deg, #f8fafc, #eef2ff);
+                border:1px solid #e0e7ff;
+                margin-top: 1rem;
+            ">
+            """,
+            unsafe_allow_html=True,
+        )
 
         st.subheader("Prediction result")
         st.write(f"Estimated churn probability: **{prob:.2f}**")
@@ -249,7 +270,9 @@ if st.button("Predict churn"):
         else:
             st.success("This customer is **not likely** to churn.")
 
+        st.markdown("</div>", unsafe_allow_html=True)
     except Exception as e:
+        ...
         st.error(
             "An error occurred while making the prediction. "
             "Please ensure the saved `churn_pipeline.joblib` was trained "
