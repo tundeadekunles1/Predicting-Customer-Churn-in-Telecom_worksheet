@@ -154,6 +154,33 @@ def build_feature_row(
 
     return pd.DataFrame(data)
 
+def build_features_from_raw(df: pd.DataFrame) -> pd.DataFrame:
+    feature_rows = []
+    for _, row in df.iterrows():
+        feature_row = build_feature_row(
+            senior_citizen=int(row["SeniorCitizen"]),
+            tenure=int(row["tenure"]),
+            monthly_charges=float(row["MonthlyCharges"]),
+            total_charges=float(row["TotalCharges"]),
+            gender=row["gender"],
+            partner=row["Partner"],
+            dependents=row["Dependents"],
+            phone_service=row["PhoneService"],
+            multiple_lines=row["MultipleLines"],
+            internet_service=row["InternetService"],
+            online_security=row["OnlineSecurity"],
+            online_backup=row["OnlineBackup"],
+            device_protection=row["DeviceProtection"],
+            tech_support=row["TechSupport"],
+            streaming_tv=row["StreamingTV"],
+            streaming_movies=row["StreamingMovies"],
+            contract=row["Contract"],
+            paperless_billing=row["PaperlessBilling"],
+            payment_method=row["PaymentMethod"],
+        )
+        feature_rows.append(feature_row)
+
+    return pd.concat(feature_rows, ignore_index=True)
 
 # --------------------------------------------------
 # Sidebar: user inputs
@@ -279,3 +306,72 @@ if st.button("Predict churn"):
             "on the same 26 features as constructed here."
         )
         st.exception(e)
+
+        st.subheader("Batch prediction from CSV")
+
+uploaded_file = st.file_uploader(
+    "Upload customer data CSV",
+    type=["csv"],
+    help=(
+        "Use columns: customerID, gender, SeniorCitizen, Partner, Dependents, tenure, "
+        "PhoneService, MultipleLines, InternetService, OnlineSecurity, OnlineBackup, "
+        "DeviceProtection, TechSupport, StreamingTV, StreamingMovies, Contract, "
+        "PaperlessBilling, PaymentMethod, MonthlyCharges, TotalCharges, Churn (optional)."
+    ),
+)
+
+if uploaded_file is not None:
+    raw_df = pd.read_csv(uploaded_file)
+    st.write("Preview of uploaded data:")
+    st.dataframe(raw_df.head())
+
+if st.button("Run batch prediction"):
+        try:
+            # Work on a copy so original stays visible
+            clean_df = raw_df.copy()
+
+            # Convert numeric columns, coerce errors to NaN
+            for col in ["tenure", "MonthlyCharges", "TotalCharges"]:
+                clean_df[col] = pd.to_numeric(clean_df[col], errors="coerce")
+
+            # Drop rows with missing required numeric values
+            clean_df = clean_df.dropna(subset=["tenure", "MonthlyCharges", "TotalCharges"])
+
+            if clean_df.empty:
+                st.error(
+                    "No valid rows after cleaning numeric columns "
+                    "(tenure, MonthlyCharges, TotalCharges)."
+                )
+            else:
+                batch_features = build_features_from_raw(clean_df)
+
+                probs = pipeline.predict_proba(batch_features)[:, 1]
+                preds = pipeline.predict(batch_features)
+
+                # Convert boolean to int (0/1)-text
+                preds_int = preds.astype(int)
+
+                result_df = clean_df.copy()
+                result_df["churn_probability"] = probs
+                result_df["churn_prediction"] = preds_int  # 1 = churn, 0 = no churn
+
+                #result_df["churn_flag_0_3"] = (result_df["churn_probability"] >= 0.3).astype(int)
+
+
+                st.subheader("Batch prediction results")
+                st.dataframe(result_df)
+
+                csv_out = result_df.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    label="Download results as CSV",
+                    data=csv_out,
+                    file_name="churn_batch_predictions.csv",
+                    mime="text/csv",
+                )
+        except Exception as e:
+            st.error(
+                "Error while running batch prediction. "
+                "Check column names and data types."
+            )
+            st.exception(e)
+
