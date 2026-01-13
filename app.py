@@ -1,27 +1,38 @@
-import os
-import joblib
+# app_retention_targeting_v2.py
+# Telco Customer Churn — Retention Targeting (Lift@k aligned evaluation)
+#
+# Key additions vs earlier app:
+# - Metrics (Baseline / Precision@k / Recall@k / Lift@k) can be computed on a HOLDOUT split
+#   to avoid optimistic/pessimistic bias from scoring the full dataset.
+#
+# Run:
+#   streamlit run app_retention_targeting_v2.py
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
 import pandas as pd
 import streamlit as st
-from src.Feature_engineering import engineer_features
-# --------------------------------------------------
-# Constants feature engineering
-# --------------------------------------------------
-MONTHLY_MEAN = 64.76169246059918
+
+try:
+    import joblib  # type: ignore
+except Exception:
+    joblib = None  # type: ignore
+
+from sklearn.model_selection import train_test_split
 
 
-# --------------------------------------------------
-# Streamlit page config
-# --------------------------------------------------
-st.set_page_config(
-    page_title="Telecom Customer Churn Predictor",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+st.set_page_config(page_title="Telco Churn — Retention Targeting", page_icon="📉", layout="wide")
+
 st.markdown(
     """
     <h1 style="font-size:2.4rem; margin-bottom:0.4rem;">
-        Telecom Customer Churn Predictor
+       Capstone Project : Telecom Customer Churn Predictor 
+          Olatunde Adekunle (DSML)FE/23/20528373
+
     </h1>
     <p style="font-size:1rem; color:#6c757d; max-width:520px;">
         Enter customer information to estimate churn probability and take action
@@ -33,345 +44,302 @@ st.markdown(
 st.markdown("<br>", unsafe_allow_html=True)
 
 
-# --------------------------------------------------
-# Load trained pipeline (preprocessor + LogisticRegression)
-# --------------------------------------------------
-@st.cache_resource
-def load_pipeline():
-    model_path = os.path.join("models", "churn_pipeline.joblib")
-    if not os.path.exists(model_path):
-        st.error(
-            "Model file `models/churn_pipeline.joblib` not found.\n\n"
-            "Please run the notebook cell that saves the logistic regression pipeline."
-            "as `churn_pipeline.joblib` inside the `models` folder."
-        )
-        st.stop()
-    return joblib.load(model_path)
+def project_root() -> Path:
+    return Path(__file__).resolve().parent
 
 
-pipeline = load_pipeline()
+def detect_customer_id_col(df: pd.DataFrame) -> Optional[str]:
+    candidates = ["customerID", "CustomerID", "customer_id", "CustID", "cust_id", "subscriber_id"]
+    lowered = {c.lower(): c for c in df.columns}
+    for c in candidates:
+        if c.lower() in lowered:
+            return lowered[c.lower()]
+    return None
 
 
-# --------------------------------------------------
-# Helper functions to build the 26 features
-# --------------------------------------------------
-def build_feature_row(
-    senior_citizen: int,
-    tenure: int,
-    monthly_charges: float,
-    total_charges: float,
-    gender: str,
-    partner: str,
-    dependents: str,
-    phone_service: str,
-    multiple_lines: str,
-    internet_service: str,
-    online_security: str,
-    online_backup: str,
-    device_protection: str,
-    tech_support: str,
-    streaming_tv: str,
-    streaming_movies: str,
-    contract: str,
-    paperless_billing: str,
-    payment_method: str,
-) -> pd.DataFrame:
-    """
-    Build a single-row DataFrame using the 26 training features.
-    """
-
-    # --- Core numeric features ---
-    charges_ratio = total_charges / tenure if tenure > 0 else 0.0
-
-    high_spender = 1 if monthly_charges > MONTHLY_MEAN else 0
-
-    high_churn_risk = 1 if (
-        senior_citizen == 1
-        and monthly_charges > MONTHLY_MEAN
-        and tenure <= 12
-    ) else 0
-
-    # --- One-hot style binary flags from categorical inputs ---
-    gender_male = 1 if gender == "Male" else 0
-
-    partner_yes = 1 if partner == "Yes" else 0
-    dependents_yes = 1 if dependents == "Yes" else 0
-
-    phone_service_yes = 1 if phone_service == "Yes" else 0
-    multiple_lines_yes = 1 if multiple_lines == "Yes" else 0
-
-    internet_fiber = 1 if internet_service == "Fiber optic" else 0
-    internet_no = 1 if internet_service == "No" else 0
-
-    online_security_yes = 1 if online_security == "Yes" else 0
-    online_backup_yes = 1 if online_backup == "Yes" else 0
-    device_protection_yes = 1 if device_protection == "Yes" else 0
-    tech_support_yes = 1 if tech_support == "Yes" else 0
-
-    streaming_tv_yes = 1 if streaming_tv == "Yes" else 0
-    streaming_movies_yes = 1 if streaming_movies == "Yes" else 0
-
-    contract_one_year = 1 if contract == "One year" else 0
-    contract_two_year = 1 if contract == "Two year" else 0
-
-    paperless_billing_yes = 1 if paperless_billing == "Yes" else 0
-
-    payment_credit_card = 1 if payment_method == "Credit card (automatic)" else 0
-    payment_electronic_check = 1 if payment_method == "Electronic check" else 0
-    payment_mailed_check = 1 if payment_method == "Mailed check" else 0
-
-    # --- Build DataFrame using 26 columns in training list ---
-    data = {
-        "SeniorCitizen": [senior_citizen],
-        "tenure": [tenure],
-        "MonthlyCharges": [monthly_charges],
-        "TotalCharges": [total_charges],
-        "charges_ratio": [charges_ratio],
-
-        "gender_Male": [gender_male],
-        "Partner_Yes": [partner_yes],
-        "Dependents_Yes": [dependents_yes],
-        "PhoneService_Yes": [phone_service_yes],
-        "MultipleLines_Yes": [multiple_lines_yes],
-        "InternetService_Fiber optic": [internet_fiber],
-        "InternetService_No": [internet_no],
-        "OnlineSecurity_Yes": [online_security_yes],
-        "OnlineBackup_Yes": [online_backup_yes],
-        "DeviceProtection_Yes": [device_protection_yes],
-        "TechSupport_Yes": [tech_support_yes],
-        "StreamingTV_Yes": [streaming_tv_yes],
-        "StreamingMovies_Yes": [streaming_movies_yes],
-        "Contract_One year": [contract_one_year],
-        "Contract_Two year": [contract_two_year],
-        "PaperlessBilling_Yes": [paperless_billing_yes],
-        "PaymentMethod_Credit card (automatic)": [payment_credit_card],
-        "PaymentMethod_Electronic check": [payment_electronic_check],
-        "PaymentMethod_Mailed check": [payment_mailed_check],
-
-        "HighSpender": [high_spender],
-        "HighChurnRisk": [high_churn_risk],
-    }
-
-    return pd.DataFrame(data)
-
-def build_features_from_raw(df: pd.DataFrame) -> pd.DataFrame:
-    feature_rows = []
-    for _, row in df.iterrows():
-        feature_row = build_feature_row(
-            senior_citizen=int(row["SeniorCitizen"]),
-            tenure=int(row["tenure"]),
-            monthly_charges=float(row["MonthlyCharges"]),
-            total_charges=float(row["TotalCharges"]),
-            gender=row["gender"],
-            partner=row["Partner"],
-            dependents=row["Dependents"],
-            phone_service=row["PhoneService"],
-            multiple_lines=row["MultipleLines"],
-            internet_service=row["InternetService"],
-            online_security=row["OnlineSecurity"],
-            online_backup=row["OnlineBackup"],
-            device_protection=row["DeviceProtection"],
-            tech_support=row["TechSupport"],
-            streaming_tv=row["StreamingTV"],
-            streaming_movies=row["StreamingMovies"],
-            contract=row["Contract"],
-            paperless_billing=row["PaperlessBilling"],
-            payment_method=row["PaymentMethod"],
-        )
-        feature_rows.append(feature_row)
-
-    return pd.concat(feature_rows, ignore_index=True)
-
-# --------------------------------------------------
-# Sidebar: user inputs
-# --------------------------------------------------
-st.sidebar.header("Customer information")
-
-gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
-
-senior_citizen = st.sidebar.selectbox("Senior Citizen", [0, 1])
-partner = st.sidebar.selectbox("Partner", ["No", "Yes"])
-dependents = st.sidebar.selectbox("Dependents", ["No", "Yes"])
-
-phone_service = st.sidebar.selectbox("Phone Service", ["No", "Yes"])
-multiple_lines = st.sidebar.selectbox("Multiple Lines", ["No", "Yes"])
-
-internet_service = st.sidebar.selectbox(
-    "Internet Service",
-    ["DSL", "Fiber optic", "No"]
-)
-
-online_security = st.sidebar.selectbox("Online Security", ["No", "Yes"])
-online_backup = st.sidebar.selectbox("Online Backup", ["No", "Yes"])
-device_protection = st.sidebar.selectbox("Device Protection", ["No", "Yes"])
-tech_support = st.sidebar.selectbox("Tech Support", ["No", "Yes"])
-streaming_tv = st.sidebar.selectbox("Streaming TV", ["No", "Yes"])
-streaming_movies = st.sidebar.selectbox("Streaming Movies", ["No", "Yes"])
-
-contract = st.sidebar.selectbox(
-    "Contract",
-    ["Month-to-month", "One year", "Two year"]
-)
-
-paperless_billing = st.sidebar.selectbox("Paperless Billing", ["No", "Yes"])
-
-payment_method = st.sidebar.selectbox(
-    "Payment Method",
-    [
-        "Electronic check",
-        "Mailed check",
-        "Bank transfer (automatic)",
-        "Credit card (automatic)",
-    ]
-)
-
-tenure = st.sidebar.slider("Tenure (months)", min_value=0, max_value=72, value=12)
-monthly_charges = st.sidebar.number_input(
-    "Monthly Charges",
-    min_value=0.0,
-    max_value=250.0,
-    value=70.0,
-    step=1.0,
-)
-total_charges = st.sidebar.number_input(
-    "Total Charges",
-    min_value=0.0,
-    max_value=10000.0,
-    value=1000.0,
-    step=10.0,
-)
+def detect_label_col(df: pd.DataFrame) -> Optional[str]:
+    # Project label is explicitly Churn_Yes
+    lowered = {c.lower(): c for c in df.columns}
+    return lowered.get("churn_yes", None)
 
 
-# --------------------------------------------------
-# Build input DataFrame and predict
-# --------------------------------------------------
-input_df = build_feature_row(
-    senior_citizen=senior_citizen,
-    tenure=tenure,
-    monthly_charges=monthly_charges,
-    total_charges=total_charges,
-    gender=gender,
-    partner=partner,
-    dependents=dependents,
-    phone_service=phone_service,
-    multiple_lines=multiple_lines,
-    internet_service=internet_service,
-    online_security=online_security,
-    online_backup=online_backup,
-    device_protection=device_protection,
-    tech_support=tech_support,
-    streaming_tv=streaming_tv,
-    streaming_movies=streaming_movies,
-    contract=contract,
-    paperless_billing=paperless_billing,
-    payment_method=payment_method,
-)
-
-st.subheader("Model input features")
-st.dataframe(input_df)
+def normalize_label(y: pd.Series) -> pd.Series:
+    if y.dtype == bool:
+        return y.astype(int)
+    if pd.api.types.is_numeric_dtype(y):
+        return y.astype(int)
+    y_str = y.astype(str).str.strip().str.lower()
+    mapping = {"yes": 1, "true": 1, "1": 1, "no": 0, "false": 0, "0": 0}
+    mapped = y_str.map(mapping)
+    return mapped.fillna(0).astype(int)
 
 
-if st.button("Predict churn"):
+@st.cache_resource(show_spinner=False)
+def load_model(model_path: str):
+    if joblib is None:
+        raise RuntimeError("joblib is not available. Please `pip install joblib`.")
+    p = Path(model_path)
+    if not p.exists():
+        raise FileNotFoundError(f"Model file not found: {p}")
+    return joblib.load(p)
+
+
+@st.cache_data(show_spinner=False)
+def load_default_dataset() -> Tuple[Optional[pd.DataFrame], Optional[Path]]:
+    root = project_root()
+    p = root / "data" / "processed" / "telco_churn_processed.csv"
+    if not p.exists():
+        return None, p
     try:
-        prob = pipeline.predict_proba(input_df)[:, 1][0]
-        pred = pipeline.predict(input_df)[0]
+        return pd.read_csv(p), p
+    except Exception:
+        return None, p
 
-        st.markdown(
-            """
-            <div style="
-                border-radius:18px;
-                padding:18px 20px;
-                background:linear-gradient(135deg, #f8fafc, #eef2ff);
-                border:1px solid #e0e7ff;
-                margin-top: 1rem;
-            ">
-            """,
-            unsafe_allow_html=True,
-        )
 
-        st.subheader("Prediction result")
-        st.write(f"Estimated churn probability: **{prob:.2f}**")
+def expected_input_columns(model) -> Optional[List[str]]:
+    try:
+        if hasattr(model, "feature_names_in_"):
+            cols = list(getattr(model, "feature_names_in_"))
+            return cols if cols else None
+    except Exception:
+        pass
+    return None
 
-        if int(pred) == 1:
-            st.error("This customer is **likely** to churn.")
-        else:
-            st.success("This customer is **not likely** to churn.")
 
-        st.markdown("</div>", unsafe_allow_html=True)
-    except Exception as e:
-        ...
-        st.error(
-            "An error occurred while making the prediction. "
-            "Please ensure the saved `churn_pipeline.joblib` was trained "
-            "on the same 26 features as constructed here."
-        )
-        st.exception(e)
+def align_X_to_model(model, X_raw: pd.DataFrame) -> Tuple[pd.DataFrame, List[str], List[str]]:
+    exp_cols = expected_input_columns(model)
+    if not exp_cols:
+        return X_raw, [], []
+    extra = sorted(set(X_raw.columns) - set(exp_cols))
+    missing = sorted(set(exp_cols) - set(X_raw.columns))
+    X = X_raw.reindex(columns=exp_cols, fill_value=0)
+    return X, missing, extra
 
-        st.subheader("Batch prediction from CSV")
 
-uploaded_file = st.file_uploader(
-    "Upload customer data CSV",
-    type=["csv"],
-    help=(
-        "Use columns: customerID, gender, SeniorCitizen, Partner, Dependents, tenure, "
-        "PhoneService, MultipleLines, InternetService, OnlineSecurity, OnlineBackup, "
-        "DeviceProtection, TechSupport, StreamingTV, StreamingMovies, Contract, "
-        "PaperlessBilling, PaymentMethod, MonthlyCharges, TotalCharges, Churn (optional)."
-    ),
+def score_proba(model, X: pd.DataFrame) -> np.ndarray:
+    proba = model.predict_proba(X)
+    return proba[:, 1]
+
+
+def precision_recall_lift_at_k(y_true: np.ndarray, y_score: np.ndarray, k_frac: float) -> Dict[str, float]:
+    n = len(y_true)
+    k = max(1, int(np.ceil(k_frac * n)))
+    order = np.argsort(-y_score)
+    topk = order[:k]
+    baseline = float(np.mean(y_true))
+    precision_k = float(np.mean(y_true[topk])) if k > 0 else 0.0
+    positives = float(np.sum(y_true))
+    recall_k = float(np.sum(y_true[topk]) / positives) if positives > 0 else 0.0
+    lift_k = float(precision_k / baseline) if baseline > 0 else 0.0
+    return {"baseline": baseline, "precision_k": precision_k, "recall_k": recall_k, "lift_k": lift_k, "k": k}
+
+
+def choose_action(prob: float) -> str:
+    if prob >= 0.70:
+        return "Call"
+    if prob >= 0.40:
+        return "Offer discount"
+    return "Bundle offer"
+
+
+# Sidebar
+st.sidebar.header("Controls")
+root = project_root()
+
+model_choice = st.sidebar.selectbox(
+    "Model",
+    options=[
+        (
+            "Logistic Regression balanced",
+            str(root / "data" / "models" / "logistic_regression_balanced.pkl"),
+        ),
+        (
+            "Logistic Regression",
+            str(root / "data" / "models" / "logistic_regression.pkl"),
+        ),
+        (
+            "HistGradientBoostingClassifier",
+            str(root / "data" / "models" / "hist_gradient_boosting.pkl"),
+        ),
+    ],
+    format_func=lambda x: x[0],
 )
+model_label, model_path = model_choice
 
-if uploaded_file is not None:
-    raw_df = pd.read_csv(uploaded_file)
-    st.write("Preview of uploaded data:")
-    st.dataframe(raw_df.head())
+use_uploaded = st.sidebar.checkbox("Upload a CSV instead of using default dataset", value=False)
+uploaded_file = st.sidebar.file_uploader("Upload CSV", type=["csv"], disabled=not use_uploaded)
 
-if st.button("Run batch prediction"):
-        try:
-            # Work on a copy so original stays visible
-            clean_df = raw_df.copy()
+st.sidebar.markdown("---")
+target_tier = st.sidebar.selectbox("Target tier", options=["Top 10%", "Top 20%"])
+tier_frac = 0.10 if target_tier == "Top 10%" else 0.20
 
-            # Convert numeric columns, coerce errors to NaN
-            for col in ["tenure", "MonthlyCharges", "TotalCharges"]:
-                clean_df[col] = pd.to_numeric(clean_df[col], errors="coerce")
+min_prob = st.sidebar.slider("Minimum probability threshold (optional)", 0.0, 1.0, 0.0, 0.01)
+max_rows_show = st.sidebar.slider("Max rows to show in table", 50, 1000, 200, 50)
 
-            # Drop rows with missing required numeric values
-            clean_df = clean_df.dropna(subset=["tenure", "MonthlyCharges", "TotalCharges"])
-
-            if clean_df.empty:
-                st.error(
-                    "No valid rows after cleaning numeric columns "
-                    "(tenure, MonthlyCharges, TotalCharges)."
-                )
-            else:
-                batch_features = build_features_from_raw(clean_df)
-
-                probs = pipeline.predict_proba(batch_features)[:, 1]
-                preds = pipeline.predict(batch_features)
-
-                # Convert boolean to int (0/1)-text
-                preds_int = preds.astype(int)
-
-                result_df = clean_df.copy()
-                result_df["churn_probability"] = probs
-                result_df["churn_prediction"] = preds_int  # 1 = churn, 0 = no churn
-
-                #result_df["churn_flag_0_3"] = (result_df["churn_probability"] >= 0.3).astype(int)
+eval_on_holdout = st.sidebar.checkbox("Compute metrics on holdout split (recommended)", value=True)
+test_size = st.sidebar.slider("Holdout size", 0.1, 0.4, 0.2, 0.05) if eval_on_holdout else 0.2
 
 
-                st.subheader("Batch prediction results")
-                st.dataframe(result_df)
+# Main
+st.title("Telco Customer Churn — Retention Targeting")
 
-                csv_out = result_df.to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    label="Download results as CSV",
-                    data=csv_out,
-                    file_name="churn_batch_predictions.csv",
-                    mime="text/csv",
-                )
-        except Exception as e:
-            st.error(
-                "Error while running batch prediction. "
-                "Check column names and data types."
+with st.spinner("Loading model..."):
+    model = load_model(model_path)
+
+# Load data
+if use_uploaded:
+    if uploaded_file is None:
+        st.info("Upload a CSV to score customers, or uncheck upload to use the default dataset path.")
+        st.stop()
+    df = pd.read_csv(uploaded_file)
+    data_path_display = "Uploaded CSV"
+else:
+    df_default, default_path = load_default_dataset()
+    if df_default is None:
+        st.warning("Default dataset not found/readable. Please upload a CSV.")
+        st.stop()
+    df = df_default
+    data_path_display = str(default_path)
+
+# st.caption(f"Dataset source: {data_path_display}")
+# st.write(f"Rows: {len(df):,} | Columns: {len(df.columns):,}")
+
+auto_id = detect_customer_id_col(df)
+id_col = st.sidebar.selectbox(
+    "Customer ID column",
+    options=["(use row index)"] + list(df.columns),
+    index=0 if auto_id is None else (1 + list(df.columns).index(auto_id)),
+)
+id_col = None if id_col == "(use row index)" else id_col
+
+# Label column for metrics is fixed for this project
+LABEL_COL_NAME = "Churn_Yes"
+label_col = LABEL_COL_NAME if LABEL_COL_NAME in df.columns else None
+st.sidebar.markdown(
+    f"**Churn label (metrics):** `{LABEL_COL_NAME}`" + ("" if label_col else " (not found in dataset)")
+)
+df_work = df.copy()
+if id_col is None:
+    df_work["CustomerID"] = np.arange(len(df_work))
+    id_col_used = "CustomerID"
+else:
+    id_col_used = id_col
+
+y_true: Optional[pd.Series]
+if label_col is not None:
+    y_tmp = normalize_label(df_work[label_col])
+    # Guardrail: metrics require a binary label
+    uniq = set(pd.unique(y_tmp.dropna()))
+    if not uniq.issubset({0, 1}):
+        st.warning(f"Column `{label_col}` is not a binary label (0/1 or Yes/No). Metrics will be hidden.")
+        y_true = None
+    else:
+        y_true = y_tmp.astype(int)
+else:
+    y_true = None
+
+# Scoring
+st.header("Scoring")
+
+drop_cols = [id_col_used]
+if label_col is not None:
+    drop_cols.append(label_col)
+
+X_raw = df_work.drop(columns=drop_cols, errors="ignore").copy()
+X, missing_cols, extra_cols = align_X_to_model(model, X_raw)
+
+with st.expander("Input feature alignment diagnostics"):
+    st.write(f"Raw feature columns provided: **{len(X_raw.columns)}**")
+    exp = expected_input_columns(model)
+    if exp:
+        st.write(f"Model expected columns: **{len(exp)}**")
+        st.write(f"Extra columns dropped: **{len(extra_cols)}**")
+        if extra_cols:
+            st.code(", ".join(extra_cols))
+        st.write(f"Missing columns filled with 0: **{len(missing_cols)}**")
+        if missing_cols:
+            st.code(", ".join(missing_cols))
+        st.write("Sanity check: label in expected features?")
+        st.code(str(set(exp) & {"Churn_Yes"}))
+    else:
+        st.info("Model does not expose feature_names_in_. No alignment performed.")
+
+churn_prob = score_proba(model, X)
+
+# Retention Targeting list on FULL population
+id_display_col = id_col_used
+scored = pd.DataFrame({id_display_col: df_work[id_col_used].astype(str), "churn_probability": churn_prob})
+scored["Action"] = scored["churn_probability"].apply(choose_action)
+
+# Metrics (full or holdout)
+st.header("Retention Targeting")
+
+metric_cols = st.columns(4)
+if y_true is not None:
+    # Evaluate metrics either on a stratified holdout (preferred) or on the full dataset
+    y_arr = y_true.to_numpy(dtype=int)
+
+    if eval_on_holdout:
+        class_counts = pd.Series(y_arr).value_counts()
+        if (len(class_counts) < 2) or (class_counts.min() < 2):
+            st.warning(
+                "Not enough samples in one class for a stratified holdout split. "
+                "Computing metrics on the full dataset instead."
             )
-            st.exception(e)
+            y_eval = y_arr
+            p_eval = churn_prob
+        else:
+            idx_all = np.arange(len(df_work))
+            _, idx_test = train_test_split(
+                idx_all,
+                test_size=float(test_size),
+                stratify=y_arr,
+                random_state=42,
+            )
+            y_eval = y_arr[idx_test]
+            p_eval = churn_prob[idx_test]
+    else:
+        y_eval = y_arr
+        p_eval = churn_prob
 
+    metrics = precision_recall_lift_at_k(y_eval, p_eval, tier_frac)
+    metric_cols[0].metric("Baseline (Churn Rate)", f"{metrics['baseline']:.3f}")
+    metric_cols[1].metric(f"Precision@{target_tier}", f"{metrics['precision_k']:.3f}")
+    metric_cols[2].metric(f"Recall@{target_tier}", f"{metrics['recall_k']:.3f}")
+    metric_cols[3].metric(f"Lift@{target_tier}", f"{metrics['lift_k']:.2f}×")
+
+    if metrics["lift_k"] < 1.0:
+        st.warning(
+            "Lift@k is below 1 on the evaluation set. This indicates targeting is not yet better than random selection. "
+            "Next steps: verify label alignment, ensure feature engineering matches training, and re-train/tune for Lift@k."
+        )
+else:
+    metric_cols[0].metric("Baseline (Churn Rate)", "—")
+    metric_cols[1].metric(f"Precision@{target_tier}", "—")
+    metric_cols[2].metric(f"Recall@{target_tier}", "—")
+    metric_cols[3].metric(f"Lift@{target_tier}", "—")
+    st.info(
+        "Metrics require the `Churn_Yes` column. Upload a dataset that includes `Churn_Yes` to display "
+        "Baseline / Precision@k / Recall@k / Lift@k."
+    )
+
+# Build targeted list
+n_total = len(scored)
+k = max(1, int(np.ceil(tier_frac * n_total)))
+targeted = scored.sort_values("churn_probability", ascending=False).head(k)
+if min_prob > 0:
+    targeted = targeted[targeted["churn_probability"] >= min_prob]
+
+st.subheader("Top Segment List")
+display_cols = [id_display_col, "churn_probability", "Action"]
+targeted_display = targeted[display_cols].head(max_rows_show).copy()
+targeted_display["churn_probability"] = targeted_display["churn_probability"].round(4)
+
+st.dataframe(targeted_display, use_container_width=True)
+
+st.download_button(
+    "Download targeted customers (CSV)",
+    data=targeted_display.to_csv(index=False).encode("utf-8"),
+    file_name=f"retention_targeting_{target_tier.replace(' ', '').lower()}_{model_label.replace(' ', '_').lower()}.csv",
+    mime="text/csv",
+)
